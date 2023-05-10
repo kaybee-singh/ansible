@@ -1,0 +1,65 @@
+---
+- hosts: all
+  vars:
+     ports:
+       - 6443/tcp
+       - 2379/tcp
+       - 2380/tcp
+       - 10250/tcp
+       - 10251/tcp
+       - 10251/tcp
+  tasks:
+   - name: Setting IP address
+     shell:
+      cmd: nmcli connection add con-name test ifname `nmcli device | awk '{print $1}'|grep ^e` type ethernet autoconnect yes ipv4.method auto
+   - name: Setting hostname
+     shell:
+      cmd: hostnamectl set-hostname master.example.com
+   - name: making an entry in /etc/hosts file
+     shell:
+      cmd:  echo "`hostname -i` master.example.com master" >> /etc/hosts
+
+   - name: Disabling SELinux
+     shell:
+      cmd:  sed -i 's/^SELINUX=enforcing$/SELINUX=disabled/' /etc/selinux/config
+
+   - name: Configuring Firewalld
+     firewalld:
+      port: "{{ item }}"
+      permanent: yes
+      state: enabled
+      immediate: true
+     loop:
+       - 6443/tcp
+       - 2379/tcp
+       - 2380/tcp
+       - 10250/tcp
+       - 10251/tcp
+       - 10251/tcp
+   - name: reload service firewalld
+     systemd:
+      name: firewalld
+      state: reloaded
+   - name: Installing Yum utils
+     yum:
+      name: yum-utils
+      state: present
+   - name: Adding repository
+     shell:
+      cmd: dnf config-manager --add-repo=https://download.docker.com/linux/centos/docker-ce.repo
+   - name: Creating kubernetes repo file
+     ansible.builtin.template:
+      src: /root/ansible/repo-file
+      dest: /etc/yum.repos.d/kubernetes.repo
+      owner: root
+      group: root
+   - name: Installing Kubernetes Packages
+     yum:
+      name: "{{ item }}"
+      state: present
+     loop:
+         - kubeadm
+         - kubelet
+         - kubectl
+
+      
